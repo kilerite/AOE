@@ -1,41 +1,33 @@
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import { createClient } from '@supabase/supabase-js';
-
-// Compatibilidad con ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// ✅ Supabase config (usa variables de entorno seguras en Render)
+// Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
-// app.use(express.static(path.join(__dirname, '../dist')));
 
-// 🧠 Simulación de respuestas de modelos LLM (puedes reemplazar por APIs reales)
+// Simulación de respuestas de LLMs
 const mockLLMResponses = {
-  Gemini: (question) => `Gemini response to: "${question}"`,
-  ChatGPT: (question) => `ChatGPT response to: "${question}"`,
-  Claude: (question) => `Claude response to: "${question}"`
+  Gemini: (q) => `Gemini response to: "${q}"`,
+  ChatGPT: (q) => `ChatGPT response to: "${q}"`,
+  Claude: (q) => `Claude response to: "${q}"`
 };
 
 async function callLLMAPI(model, question) {
-  await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
+  await new Promise((r) => setTimeout(r, Math.random() * 2000 + 1000));
   return mockLLMResponses[model](question);
 }
 
-// 📌 API para enviar una pregunta y recibir respuestas de los modelos
+// --- API Routes ---
+
 app.post('/api/preguntar', async (req, res) => {
   const { texto_pregunta } = req.body;
   if (!texto_pregunta) return res.status(400).json({ error: 'texto_pregunta is required' });
@@ -61,7 +53,7 @@ app.post('/api/preguntar', async (req, res) => {
         modelo_llm: model,
         texto_respuesta: respuesta
       }]);
-    } catch (error) {
+    } catch {
       respuestas[model] = `Error en modelo ${model}`;
     }
   }
@@ -69,7 +61,6 @@ app.post('/api/preguntar', async (req, res) => {
   res.json({ pregunta_id: pregunta.id, respuestas });
 });
 
-// 📊 API para dashboard (conteo de menciones de marcas por modelo)
 app.get('/api/dashboard-data', async (req, res) => {
   try {
     const { data: marcas } = await supabase.from('marcas').select('*');
@@ -78,24 +69,24 @@ app.get('/api/dashboard-data', async (req, res) => {
     const brandMentions = {};
     const modelBrandMentions = {};
 
-    marcas.forEach(marca => {
-      brandMentions[marca.nombre_marca] = 0;
-      modelBrandMentions[marca.nombre_marca] = {
+    marcas.forEach(m => {
+      brandMentions[m.nombre_marca] = 0;
+      modelBrandMentions[m.nombre_marca] = {
         Gemini: 0,
         ChatGPT: 0,
         Claude: 0
       };
     });
 
-    respuestas.forEach(respuesta => {
-      const texto = respuesta.texto_respuesta.toLowerCase();
-      const modelo = respuesta.modelo_llm;
-      marcas.forEach(marca => {
-        const nombre = marca.nombre_marca.toLowerCase();
+    respuestas.forEach(r => {
+      const texto = r.texto_respuesta.toLowerCase();
+      const modelo = r.modelo_llm;
+      marcas.forEach(m => {
+        const nombre = m.nombre_marca.toLowerCase();
         const count = (texto.match(new RegExp(nombre, 'g')) || []).length;
         if (count > 0) {
-          brandMentions[marca.nombre_marca] += count;
-          modelBrandMentions[marca.nombre_marca][modelo] += count;
+          brandMentions[m.nombre_marca] += count;
+          modelBrandMentions[m.nombre_marca][modelo] += count;
         }
       });
     });
@@ -110,12 +101,11 @@ app.get('/api/dashboard-data', async (req, res) => {
       totalResponses: respuestas.length,
       totalBrands: marcas.length
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Error interno al procesar dashboard' });
+  } catch {
+    res.status(500).json({ error: 'Error en dashboard-data' });
   }
 });
 
-// CRUD para marcas
 app.get('/api/marcas', async (req, res) => {
   const { data, error } = await supabase.from('marcas').select('*').order('nombre_marca');
   if (error) return res.status(500).json({ error: 'Error al obtener marcas' });
@@ -138,7 +128,6 @@ app.delete('/api/marcas/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// Consultar preguntas y sus respuestas
 app.get('/api/preguntas', async (req, res) => {
   const { data, error } = await supabase.from('preguntas').select(`
     *,
@@ -154,12 +143,7 @@ app.get('/api/preguntas', async (req, res) => {
   res.json(data);
 });
 
-// Redireccionar a React en cualquier otra ruta
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
-// Iniciar servidor
+// Start
 app.listen(port, () => {
   console.log(`✅ AEO Tracker backend listo en puerto ${port}`);
 });
