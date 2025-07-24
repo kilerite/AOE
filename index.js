@@ -21,7 +21,7 @@ const supabase = createClient(
 // Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../dist')));
+// app.use(express.static(path.join(__dirname, '../dist')));
 
 // 🧠 Simulación de respuestas de modelos LLM (puedes reemplazar por APIs reales)
 const mockLLMResponses = {
